@@ -14,6 +14,7 @@ import subprocess
 import bz2
 from deepface.commons import distance
 from mtcnn import MTCNN #0.1.0
+from deepface.basemodels.retinaface.detector import RetinaFace
 
 import tensorflow as tf
 tf_version = int(tf.__version__.split(".")[0])
@@ -134,6 +135,20 @@ def initialize_detector(detector_backend):
 		
 	elif detector_backend == 'mtcnn':
 		face_detector = MTCNN()
+
+	elif detector_backend == 'retina':
+		# check required retina model exists in the home/.deepface/weights folder
+
+		# pre-trained weights
+		if os.path.isfile(home + '/.deepface/weights/Resnet50_Final.pth') != True:
+			print("Resnet50_Final.pth will be downloaded...")
+
+			url = "https://drive.google.com/file/d/1G4_M9y6na81l3UCm-tOUGKFOaczEJ5sT/view?usp=sharing"
+
+			output = home + '/.deepface/weights/Resnet50_Final.pth'
+
+			gdown.download(url, output, quiet=False)
+		face_detector = RetinaFace()
 
 def initializeFolder():
 	
@@ -296,7 +311,7 @@ def detect_face(img, detector_backend = 'opencv', grayscale = False, enforce_det
 	elif detector_backend == 'mtcnn':
 		
 		img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB) #mtcnn expects RGB but OpenCV read BGR
-		detections = face_detector.detect_faces(img_rgb)
+		detections = face_detector(img_rgb)
 		
 		if len(detections) > 0:
 			detection = detections[0]
@@ -310,9 +325,30 @@ def detect_face(img, detector_backend = 'opencv', grayscale = False, enforce_det
 	
 			else:
 				raise ValueError("Face could not be detected. Please confirm that the picture is a face photo or consider to set enforce_detection param to False.")
+
+	elif detector_backend == 'retina':
+
+		img_rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # retina expects RGB but OpenCV read BGR
+		detections = face_detector(img_rgb)
+
+		if len(detections) > 0:
+			detection = detections[0][0]
+			b = detections[0][1]
+			box = detection.astype(np.int)
+			detected_face = img[box[1]:box[3], box[0]:box[2]]
+
+			return detected_face
+
+		else:  # if no face detected
+			if not enforce_detection:
+				return img
+
+			else:
+				raise ValueError(
+					"Face could not be detected. Please confirm that the picture is a face photo or consider to set enforce_detection param to False.")
 	
 	else:
-		detectors = ['opencv', 'ssd', 'dlib', 'mtcnn']
+		detectors = ['opencv', 'ssd', 'dlib', 'mtcnn', 'retina']
 		raise ValueError("Valid backends are ", detectors," but you passed ", detector_backend)
 
 def alignment_procedure(img, left_eye, right_eye):
@@ -434,6 +470,18 @@ def align_face(img, detector_backend = 'opencv'):
 			
 			img = alignment_procedure(img, left_eye, right_eye)
 				
+		return img #return img anyway
+
+	elif detector_backend == 'retina':
+		img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)  # retina expects RGB but OpenCV read BGR
+		detections = face_detector(img)
+		if len(detections) > 0:
+			keypoints = detections[0][1]
+			left_eye = keypoints[0]
+			right_eye = keypoints[1]
+
+			img = alignment_procedure(img, left_eye, right_eye)
+
 		return img #return img anyway
 	
 def preprocess_face(img, target_size=(224, 224), grayscale = False, enforce_detection = True, detector_backend = 'opencv'):
