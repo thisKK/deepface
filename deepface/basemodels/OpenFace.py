@@ -13,7 +13,7 @@ from tensorflow.keras import backend as K
 
 #---------------------------------------
 
-def loadModel(url = 'https://drive.google.com/uc?id=1LSe1YCV1x-BfNnfb7DFZTNpv_Q9jITxn'):
+def loadModel(url = 'https://drive.google.com/file/d/10LRZtDftbBUc-1haQKtfQarM-p2hgwY0/view?usp=sharing'):
 	myInput = Input(shape=(96, 96, 3))
 
 	x = ZeroPadding2D(padding=(3, 3), input_shape=(96, 96, 3))(myInput)

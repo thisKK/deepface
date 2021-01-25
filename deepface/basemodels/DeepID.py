@@ -9,7 +9,7 @@ from tensorflow.keras.layers import Conv2D, Activation, Input, Add, MaxPooling2D
 
 #-------------------------------------
 
-def loadModel(url = 'https://drive.google.com/uc?id=1uRLtBCTQQAvHJ_KVrdbRJiCKxU8m5q2J'):
+def loadModel(url = 'https://drive.google.com/file/d/1JuSIWGEweybj6bkngTeKCqIf_ebhPRXY/view?usp=sharing'):
 	
 	myInput = Input(shape=(55, 47, 3))
 	

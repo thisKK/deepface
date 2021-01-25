@@ -15,6 +15,7 @@ import bz2
 from deepface.commons import distance
 from mtcnn import MTCNN #0.1.0
 from deepface.basemodels.retinaface.detector import RetinaFace
+from deepface.commons import functions
 
 import tensorflow as tf
 tf_version = int(tf.__version__.split(".")[0])
@@ -148,7 +149,7 @@ def initialize_detector(detector_backend):
 			output = home + '/.deepface/weights/Resnet50_Final.pth'
 
 			gdown.download(url, output, quiet=False)
-		face_detector = RetinaFace()
+		face_detector = RetinaFace(gpu_id=0)
 
 def initializeFolder():
 	

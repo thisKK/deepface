@@ -168,13 +168,19 @@ def verify(img1_path, img2_path = '', model_name = 'VGG-Face', distance_metric =
 				for j in metrics:
 					
 					if j == 'cosine':
+						print("----------------------------------")
 						distance = dst.findCosineDistance(img1_representation, img2_representation)
+
 					elif j == 'euclidean':
 						distance = dst.findEuclideanDistance(img1_representation, img2_representation)
+
 					elif j == 'euclidean_l2':
 						distance = dst.findEuclideanDistance(dst.l2_normalize(img1_representation), dst.l2_normalize(img2_representation))
+
 					else:
 						raise ValueError("Invalid distance_metric passed - ", distance_metric)
+
+					distance = np.float64(distance)
 
 					#----------------------
 					#decision
