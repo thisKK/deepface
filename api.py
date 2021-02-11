@@ -10,7 +10,7 @@ import tensorflow as tf
 tf_version = int(tf.__version__.split(".")[0])
 
 from deepface import DeepFace
-
+ 
 #------------------------------
 
 app = Flask(__name__)
