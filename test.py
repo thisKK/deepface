@@ -15,17 +15,25 @@ es = Elasticsearch([{'host': 'localhost', 'port': '9200'}])
 # cap = cv2.VideoCapture(0) #read from web camera
 cap = cv2.VideoCapture(0)
 
-# # ---------- write out Video result -----------------
-# fourcc = cv2.VideoWriter_fourcc(*'MP4V')
-# out = cv2.VideoWriter('output.mp4', fourcc, 15.0, (1920, 1080))
-# cap.set(3, 1920)
-# cap.set(4, 1080)
+# Define the codec and create VideoWriter object
+frame_width = 1920
+frame_height = 1080
+resolution = (frame_width, frame_height)
+
+fourcc = cv2.VideoWriter_fourcc(*'XVID')
+out = cv2.VideoWriter('output.avi', fourcc, 20.0, resolution)
 
 # ---------- call class retina face detector --------------------------
 print("load retina face done!!")
 face_detector = RetinaFace(gpu_id=0)
 print("load ArcFace Models done!!")
 arcface_model = ArcFace.loadModel()
+
+
+def getAllDocNumber():
+    res = es.count(index='face_recognition')
+    res = res["count"]
+    return res
 
 def createElasticsearchIndex():
     mapping = {
@@ -39,31 +47,8 @@ def createElasticsearchIndex():
             }
         }
     }
-    # es.indices.create(index="face_recognition", body=mapping)
-
-def addFaceToDatabase():
-    createElasticsearchIndex()
-    files = []
-    for r, d, f in os.walk("./tests/dataset/"):
-        for file in f:
-            if file.endswith('.jpg'):
-                files.append(r + file)
-                print(file)
-
-    index = 0
-    for img_path in files:
-        img = functions.preprocess_face(img_path, target_size=(112, 112), detector_backend="retina",
-                                        enforce_detection=False)
-
-        embedding = arcface_model.predict(img)
-        embedding = embedding[0]
-        print(img_path)
-        doc = {"title_name": img_path, "title_vector": embedding}
-
-        es.create("face_recognition", id=index, body=doc)
-
-        index = index + 1
-
+    es.indices.create(index="face_recognition", body=mapping)
+    #Use Only one time for create index in elasticsearch
 
 def search_face(target_embeddimg):
     query = {
@@ -74,9 +59,8 @@ def search_face(target_embeddimg):
                     "match_all": {}
                 },
                 "script": {
-                    # "source": "cosineSimilarity(params.queryVector, 'title_vector') + 1.0",
-                    "source": "1 / (1 + l2norm(params.queryVector, 'title_vector'))",
-                    # euclidean distance
+                    # "source": "cosineSimilarity(params.queryVector, 'title_vector') + 1.0", #cosine distance
+                    "source": "1 / (1 + l2norm(params.queryVector, 'title_vector'))", # euclidean distance
                     "params": {
                         "queryVector": list(target_embeddimg)
                     }
@@ -92,6 +76,65 @@ def search_face(target_embeddimg):
         print(score, source)
         print("-------------------------------------------")
         return score, source
+
+def addFaceToDatabaseWithImage():
+    files = []
+    for r, d, f in os.walk("./tests/dataset/"):
+        for file in f:
+            if file.endswith('.jpg'):
+                files.append(r +'/'+ file)
+
+    index = getAllDocNumber()
+    for img_path in files:
+        file_name = img_path.split('/')[3]
+        img = functions.preprocess_face(img_path, target_size=(112, 112), detector_backend="retina",
+                                        enforce_detection=False)
+
+        embedding = arcface_model.predict(img)
+        embedding = embedding[0]
+        print(img_path)
+        doc = {"title_name": file_name, "title_vector": embedding}
+        index = index + 1
+        es.create("face_recognition", id=index, body=doc)
+
+def addFaceToDatabaseWithCamera():
+    name = input('What is you name? : ')
+    print("Pass Q for brake add face process")
+    while True:
+        isSuccess, frame = cap.read()
+        preprocess_video(frame,name)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            print("Terminate by user")
+            break
+    print("ADD FACE DONE !!")
+
+def addFaceToDatabaseWithVideo(pathVideo):
+    name = input('What is you name? : ')
+    print("Pass Q for brake add face process")
+    cap = cv2.VideoCapture(pathVideo)
+    while True:
+        isSuccess, frame = cap.read()
+        preprocess_video(frame,name)
+        if cv2.waitKey(1) & 0xFF == ord('q'):
+            print("Terminate by user")
+            break
+    print("ADD FACE DONE !!")
+
+def preprocess_video(frame, name):
+    index = getAllDocNumber()
+    cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    try:
+        img = functions.preprocess_face(frame, target_size=(112, 112), detector_backend="retina",
+                                        enforce_detection=False)
+        embedding = arcface_model.predict(img)
+        embedding = embedding[0]
+        doc = {"title_name": name, "title_vector": embedding}
+        index = index + 1
+        es.create("face_recognition", id=index, body=doc)
+        print("ADD FACE !!")
+    except:
+        pass
+    cv2.imshow("", frame)
 
 def preprocess_face(img, target_size):
     # img might be path, base64 or numpy array. Convert it to numpy whatever it is.
@@ -121,20 +164,27 @@ def preprocess_face(img, target_size):
         res_obj.append(result)
     return res_obj
 
+def drawingBBox(frame,res_obj):
+    for img, box, score in res_obj:
+        embedding = arcface_model.predict(img)
+        embedding = embedding[0]
+        score, source = search_face(embedding)
+        cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), color=(255, 0, 0), thickness=1)
+        if score < 0.45:
+            cv2.putText(frame, source, (box[0], box[1] - 5), cv2.FONT_HERSHEY_COMPLEX, 0.7,
+                        (255, 255, 255), 2)
+        else:
+            cv2.putText(frame, 'UNKNOW', (box[0], box[1] - 5), cv2.FONT_HERSHEY_COMPLEX, 0.7,
+                        (255, 255, 255), 2)
+
 def streamOnCammera():
     while True:
         isSuccess, frame = cap.read()
-        cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         try:
+            cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             t0 = time.time()
             res_obj = preprocess_face(frame, target_size=(112, 112))
-            for img, box, score in res_obj:
-                embedding = arcface_model.predict(img)
-                embedding = embedding[0]
-                score, source = search_face(embedding)
-                cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), color=(255, 0, 0), thickness=1)
-                cv2.putText(frame, source + str(score), (box[0], box[1] - 5), cv2.FONT_HERSHEY_COMPLEX, 0.7,
-                            (255, 255, 255), 2)
+            drawingBBox(frame, res_obj)
         except:
             pass
         cv2.imshow("", frame)
@@ -144,23 +194,16 @@ def streamOnCammera():
         t1 = time.time()
         print("frame")
         print(f'took {round(t1 - t0, 3)} to process')
-        # out.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
 
 def streamOnVideo(pathVideo):
     cap = cv2.VideoCapture(pathVideo)
     while True:
         isSuccess, frame = cap.read()
-        cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
         try:
+            cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             t0 = time.time()
             res_obj = preprocess_face(frame, target_size=(112, 112))
-            for img, box, score in res_obj:
-                embedding = arcface_model.predict(img)
-                embedding = embedding[0]
-                score, source = search_face(embedding)
-                cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), color=(255, 0, 0), thickness=1)
-                cv2.putText(frame, source + str(score), (box[0], box[1] - 5), cv2.FONT_HERSHEY_COMPLEX, 0.7,
-                            (255, 255, 255), 2)
+            drawingBBox(frame, res_obj)
         except:
             pass
         cv2.imshow("", frame)
@@ -170,7 +213,6 @@ def streamOnVideo(pathVideo):
         t1 = time.time()
         print("frame")
         print(f'took {round(t1 - t0, 3)} to process')
-        # out.write(cv2.cvtColor(frame, cv2.COLOR_RGB2BGR))
 
 def processOnImage(img):
     res_obj = preprocess_face(img, target_size=(112, 112))
@@ -179,9 +221,11 @@ def processOnImage(img):
 
 
 if __name__ == "__main__":
-    # streamOnCammera()
     # img = cv2.imread('./tests/dataset/lisatest.jpg')
     # processOnImage(img)
-    # streamOnVideo('./tests/video/testVideo1.mp4')
-    addFaceToDatabase()
-
+    # createElasticsearchIndex()
+    # addFaceToDatabaseWithImage()
+    # addFaceToDatabaseWithCamera()
+    # addFaceToDatabaseWithVideo('./tests/video/toei.MOV')
+    # streamOnCammera()
+    streamOnVideo('./tests/video/testVideo1.mp4')
