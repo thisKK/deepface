@@ -1,7 +1,5 @@
-import json,time
 from camera import VideoCamera
 from flask import Flask, render_template, request, jsonify, Response
-import requests
 import base64,cv2
 import time
 from tqdm import tqdm
@@ -68,7 +66,7 @@ def gen(camera):
         frame = camera.get_frame()
         res_obj = preprocess_face(frame)
         for img, box, score in res_obj:
-            embedding = arcface_model.predict(mg)
+            embedding = arcface_model.predict(img)
             embedding = embedding[0]
             score, source = search_face(embedding)
             cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), color=(255, 0, 0), thickness=1)

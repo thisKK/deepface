@@ -136,7 +136,7 @@ def preprocess_video(frame, name):
         pass
     cv2.imshow("", frame)
 
-def preprocess_face(img, target_size):
+def preprocess_face(img):
     # img might be path, base64 or numpy array. Convert it to numpy whatever it is.
     faces = face_detector(img)
     res_obj = []
@@ -183,7 +183,7 @@ def streamOnCammera():
         try:
             cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             t0 = time.time()
-            res_obj = preprocess_face(frame, target_size=(112, 112))
+            res_obj = preprocess_face(frame)
             drawingBBox(frame, res_obj)
         except:
             pass
@@ -202,10 +202,11 @@ def streamOnVideo(pathVideo):
         try:
             cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             t0 = time.time()
-            res_obj = preprocess_face(frame, target_size=(112, 112))
+            res_obj = preprocess_face(frame)
             drawingBBox(frame, res_obj)
         except:
             pass
+        out.write(frame)
         cv2.imshow("", frame)
         if cv2.waitKey(1) & 0xFF == ord('q'):
             print("Terminate by user")
@@ -215,7 +216,7 @@ def streamOnVideo(pathVideo):
         print(f'took {round(t1 - t0, 3)} to process')
 
 def processOnImage(img):
-    res_obj = preprocess_face(img, target_size=(112, 112))
+    res_obj = preprocess_face(img)
     for img, box, score in res_obj:
         cv2.rectangle(img, (box[0], box[1]), (box[2], box[3]), color=(255, 0, 0), thickness=1)
 
@@ -228,4 +229,4 @@ if __name__ == "__main__":
     # addFaceToDatabaseWithCamera()
     # addFaceToDatabaseWithVideo('./tests/video/toei.MOV')
     # streamOnCammera()
-    streamOnVideo('./tests/video/testVideo1.mp4')
+    streamOnVideo('./tests/video/testVideo3.mp4')

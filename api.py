@@ -1,21 +1,28 @@
-from flask import Flask, jsonify, request, make_response
+from flask import Flask, request, jsonify, Response
 
 import argparse
 import uuid
-import json
 import time
+import cv2
+import numpy as np
 from tqdm import tqdm
 
+from camera import VideoCamera
+from deepface.basemodels.retinaface.detector import RetinaFace
+from deepface.commons import functions
+from elasticsearch import Elasticsearch
+from deepface import DeepFace
+
+from tensorflow.keras.preprocessing import image
 import tensorflow as tf
+
 tf_version = int(tf.__version__.split(".")[0])
 
-from deepface import DeepFace
- 
-#------------------------------
+# ------------------------------
 
 app = Flask(__name__)
 
-#------------------------------
+# ------------------------------
 
 tic = time.time()
 
@@ -24,264 +31,304 @@ print("Loading Face Recognition Models...")
 pbar = tqdm(range(0, 6), desc='Loading Face Recognition Models...')
 
 for index in pbar:
-	
-	if index == 0:
-		pbar.set_description("Loading VGG-Face")
-		vggface_model = DeepFace.build_model("VGG-Face")
-	elif index == 1:
-		pbar.set_description("Loading OpenFace")
-		openface_model = DeepFace.build_model("OpenFace")
-	elif index == 2:
-		pbar.set_description("Loading Google FaceNet")
-		facenet_model = DeepFace.build_model("Facenet")
-	elif index == 3:
-		pbar.set_description("Loading Facebook DeepFace")
-		deepface_model = DeepFace.build_model("DeepFace")
-	elif index == 4:
-		pbar.set_description("Loading DeepID DeepFace")
-		deepid_model = DeepFace.build_model("DeepID")
-	elif index == 5:
-		pbar.set_description("Loading ArcFace DeepFace")
-		arcface_model = DeepFace.build_model("ArcFace")
-		
+
+    if index == 0:
+        pbar.set_description("Loading VGG-Face")
+        vggface_model = DeepFace.build_model("VGG-Face")
+    elif index == 1:
+        pbar.set_description("Loading OpenFace")
+        openface_model = DeepFace.build_model("OpenFace")
+    elif index == 2:
+        pbar.set_description("Loading Google FaceNet")
+        facenet_model = DeepFace.build_model("Facenet")
+    elif index == 3:
+        pbar.set_description("Loading Facebook DeepFace")
+        deepface_model = DeepFace.build_model("DeepFace")
+    elif index == 4:
+        pbar.set_description("Loading DeepID DeepFace")
+        deepid_model = DeepFace.build_model("DeepID")
+    elif index == 5:
+        pbar.set_description("Loading ArcFace DeepFace")
+        arcface_model = DeepFace.build_model("ArcFace")
+
 toc = time.time()
 
-print("Face recognition models are built in ", toc-tic, " seconds")
+print("Face recognition models are built in ", toc - tic, " seconds")
 
-# #------------------------------
-#
-# tic = time.time()
-#
-# print("Loading Facial Attribute Analysis Models...")
-#
-# pbar = tqdm(range(0,4), desc='Loading Facial Attribute Analysis Models...')
-#
-# for index in pbar:
-# 	if index == 0:
-# 		pbar.set_description("Loading emotion analysis model")
-# 		emotion_model = DeepFace.build_model('Emotion')
-# 	elif index == 1:
-# 		pbar.set_description("Loading age prediction model")
-# 		age_model = DeepFace.build_model('Age')
-# 	elif index == 2:
-# 		pbar.set_description("Loading gender prediction model")
-# 		gender_model = DeepFace.build_model('Gender')
-# 	elif index == 3:
-# 		pbar.set_description("Loading race prediction model")
-# 		race_model = DeepFace.build_model('Race')
-#
-# toc = time.time()
-#
-# facial_attribute_models = {}
-# facial_attribute_models["emotion"] = emotion_model
-# facial_attribute_models["age"] = age_model
-# facial_attribute_models["gender"] = gender_model
-# facial_attribute_models["race"] = race_model
-#
-# print("Facial attribute analysis models are built in ", toc-tic," seconds")
-#
-# #------------------------------
+tic = time.time()
+print("Loading Face Detector Models...")
+pbar = tqdm(range(0, 1), desc='Loading Face Detector Models...')
+for index in pbar:
+    if index == 0:
+        detector = RetinaFace(gpu_id=0)
 
-# if tf_version == 1:
-# 	graph = tf.get_default_graph()
-#------------------------------
+toc = time.time()
+print("Face Detector models are built in ", toc - tic, " seconds")
+
+if tf_version == 1:
+    graph = tf.get_default_graph()
 
 
+# ------------------------------
 
-#Service API Interface
+
+# Service API Interface
 
 @app.route('/')
 def index():
-	# tic = time.time()
-	# print("from index")
-	# img1 = "tests/dataset/img1.jpg"
-	# img2 = "tests/dataset/img2.jpg"
-	# res = DeepFace.verify(img1, img2, model=arcface_model, distance_metric="euclidean_l2", detector_backend="retina")
-	# print(res)
-	# tok = time.time()
-	# print(tok - tic)
-	return '<h1>Hello, world!</h1>'
+    return '<h1>Hello, world!</h1>'
 
-# @app.route('/analyze', methods=['POST'])
-# def analyze():
-#
-# 	global graph
-#
-# 	tic = time.time()
-# 	req = request.get_json()
-# 	trx_id = uuid.uuid4()
-#
-# 	#---------------------------
-#
-# 	if tf_version == 1:
-# 		with graph.as_default():
-# 			resp_obj = analyzeWrapper(req, trx_id)
-# 	elif tf_version == 2:
-# 		resp_obj = analyzeWrapper(req, trx_id)
-#
-# 	#---------------------------
-#
-# 	toc = time.time()
-#
-# 	resp_obj["trx_id"] = trx_id
-# 	resp_obj["seconds"] = toc-tic
-#
-# 	return resp_obj, 200
 
-# def analyzeWrapper(req, trx_id = 0):
-# 	resp_obj = jsonify({'success': False})
+# @app.route('/detection', methods=['POST'])
+# def detection():
+#     tic = time.time()
+#     req = request.get_json()
 #
-# 	instances = []
-# 	if "img" in list(req.keys()):
-# 		raw_content = req["img"] #list
+#     resp_obj = jsonify({'success': False})
+#     resp_obj = detectWrapper(req)
+#     # --------------------------
 #
-# 		for item in raw_content: #item is in type of dict
-# 			instances.append(item)
+#     toc = time.time()
 #
-# 	if len(instances) == 0:
-# 		return jsonify({'success': False, 'error': 'you must pass at least one img object in your request'}), 205
+#     resp_obj["seconds"] = toc - tic
 #
-# 	print("Analyzing ", len(instances)," instances")
-#
-# 	#---------------------------
-#
-# 	actions= ['emotion', 'age', 'gender', 'race']
-# 	if "actions" in list(req.keys()):
-# 		actions = req["actions"]
-#
-# 	#---------------------------
-#
-# 	#resp_obj = DeepFace.analyze(instances, actions=actions)
-# 	resp_obj = DeepFace.analyze(instances, actions=actions, models=facial_attribute_models)
-#
-# 	return resp_obj
+#     return resp_obj, 200
+@app.route('/detection', methods=['POST'])
+def detection():
+    req = request.get_json()
+    resp_obj = jsonify({'success': False})
+    resp_obj = detectWrapper(req)
+    return resp_obj, 200
+
 
 @app.route('/verify', methods=['POST'])
 def verify():
+    global graph
 
-	global graph
+    tic = time.time()
+    req = request.get_json()
+    trx_id = uuid.uuid4()
 
-	tic = time.time()
-	req = request.get_json()
-	trx_id = uuid.uuid4()
+    resp_obj = jsonify({'success': False})
 
-	resp_obj = jsonify({'success': False})
+    if tf_version == 1:
+        with graph.as_default():
+            resp_obj = verifyWrapper(req, trx_id)
+    elif tf_version == 2:
+        resp_obj = verifyWrapper(req, trx_id)
 
-	if tf_version == 1:
-		with graph.as_default():
-			resp_obj = verifyWrapper(req, trx_id)
-	elif tf_version == 2:
-		resp_obj = verifyWrapper(req, trx_id)
+    # --------------------------
 
-	#--------------------------
+    toc = time.time()
 
-	toc =  time.time()
+    resp_obj["trx_id"] = trx_id
+    resp_obj["seconds"] = toc - tic
 
-	resp_obj["trx_id"] = trx_id
-	resp_obj["seconds"] = toc-tic
+    return resp_obj, 200
 
-	return resp_obj, 200
 
-def verifyWrapper(req, trx_id = 0):
+@app.route('/video_feed')
+def video_feed():
+    return Response(gen(VideoCamera()), mimetype='multipart/x-mixed-replace; boundary=frame')
 
-	resp_obj = jsonify({'success': False})
 
-	model_name = "VGG-Face"; distance_metric = "cosine"
-	if "model_name" in list(req.keys()):
-		model_name = req["model_name"]
+def gen(camera):
+    while True:
+        frame = camera.get_frame()
+        res_obj = preprocess_face(frame)
+        for img, box, score in res_obj:
+            embedding = arcface_model.predict(img)
+            embedding = embedding[0]
+            score, source = search_face(embedding)
+            cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), color=(255, 0, 0), thickness=1)
+            cv2.putText(frame, source + str(score), (box[0], box[1] - 5), cv2.FONT_HERSHEY_COMPLEX, 0.7,
+                        (255, 255, 255), 2)
 
-	if "distance_metric" in list(req.keys()):
-		distance_metric = req["distance_metric"]
+        ret, jpeg = cv2.imencode('.jpg', frame)
+        data = []
+        data.append(jpeg.tobytes())
+        frame = data[0]
+        yield (b'--frame\r\n'
+               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
 
-	#----------------------
 
-	instances = []
-	if "img" in list(req.keys()):
-		raw_content = req["img"] #list
+def search_face(target_embedding):
+    es = Elasticsearch([{'host': 'localhost', 'port': '9200'}])
+    query = {
+        "size": 1,
+        "query": {
+            "script_score": {
+                "query": {
+                    "match_all": {}
+                },
+                "script": {
+                    # "source": "cosineSimilarity(params.queryVector, 'title_vector') + 1.0",
+                    "source": "1 / (1 + l2norm(params.queryVector, 'title_vector'))",
+                    # euclidean distance
+                    "params": {
+                        "queryVector": list(target_embedding)
+                    }
+                }
+            }
+        }}
 
-		for item in raw_content: #item is in type of dict
-			instance = []
-			img1 = item["img1"]; img2 = item["img2"]
+    res = es.search(index='face_recognition', body=query)
 
-			validate_img1 = False
-			if len(img1) > 11 and img1[0:11] == "data:image/":
-				validate_img1 = True
+    for i in res["hits"]["hits"]:
+        score = i["_score"]
+    source = i["_source"]["title_name"]
+    return score, source
 
-			validate_img2 = False
-			if len(img2) > 11 and img2[0:11] == "data:image/":
-				validate_img2 = True
 
-			if validate_img1 != True or validate_img2 != True:
-				return jsonify({'success': False, 'error': 'you must pass both img1 and img2 as base64 encoded string'}), 205
+def preprocess_face(img):
+    # img might be path, base64 or numpy array. Convert it to numpy whatever it is.
+    faces = detector(img)
+    res_obj = []
+    for box, landmarks, score in faces:
+        result = ()
+        score.astype(np.float)
+        box = box.astype(np.int)
+        if score < 0.4:
+            continue
+        cropped = img[box[1] - 10:box[3] + 10, box[0] - 10:box[2] + 10]
+        left_eye = landmarks[0]
+        right_eye = landmarks[1]
+        if cropped.shape[0] > 0 and cropped.shape[1] > 0:
+            img_alignment = functions.alignment_procedure(cropped, left_eye, right_eye)
+        else:
+            img_alignment = cropped
+        cropped = cv2.resize(img_alignment, (112, 112))
+        img_pixels = image.img_to_array(cropped)
+        img_pixels = np.expand_dims(img_pixels, axis=0)
+        img_pixels /= 255  # normalize input in [0, 1]
 
-			instance.append(img1); instance.append(img2)
-			instances.append(instance)
+        result = (img_pixels, box, score)
+        res_obj.append(result)
+    return res_obj
 
-	#--------------------------
 
-	if len(instances) == 0:
-		return jsonify({'success': False, 'error': 'you must pass at least one img object in your request'}), 205
+def detectWrapper(req):
+    resp_obj = jsonify({'success': False})
+    model_name = "retina"
+    if "model_name" in list(req.keys()):
+        model_name = req["model_name"]
 
-	print("Input request of ", trx_id, " has ",len(instances)," pairs to verify")
+    instances = []
+    if "img" in list(req.keys()):
+        raw_content = req["img"]  # list
 
-	#--------------------------
+        for item in raw_content:  # item is in type of dict
+            instance = []
+            img = item["img"]
 
-	if model_name == "VGG-Face":
-		resp_obj = DeepFace.verify(instances, model_name = model_name, distance_metric = distance_metric, model = vggface_model ,detector_backend="retina")
-	elif model_name == "Facenet":
-		resp_obj = DeepFace.verify(instances, model_name = model_name, distance_metric = distance_metric, model = facenet_model ,detector_backend="retina")
-	elif model_name == "OpenFace":
-		resp_obj = DeepFace.verify(instances, model_name = model_name, distance_metric = distance_metric, model = openface_model ,detector_backend="retina")
-	elif model_name == "DeepFace":
-		resp_obj = DeepFace.verify(instances, model_name = model_name, distance_metric = distance_metric, model = deepface_model ,detector_backend="retina")
-	elif model_name == "DeepID":
-		resp_obj = DeepFace.verify(instances, model_name = model_name, distance_metric = distance_metric, model = deepid_model ,detector_backend="retina")
-	elif model_name == "ArcFace":
-		resp_obj = DeepFace.verify(instances, model_name = model_name, distance_metric = distance_metric, model = arcface_model ,detector_backend="retina")
-	# elif model_name == "Ensemble":
-	# 	models =  {}
-	# 	models["VGG-Face"] = vggface_model
-	# 	models["Facenet"] = facenet_model
-	# 	models["OpenFace"] = openface_model
-	# 	models["DeepFace"] = deepface_model
-	# 	resp_obj = DeepFace.verify(instances, model_name = model_name, model = models)
-	else:
-		resp_obj = jsonify({'success': False, 'error': 'You must pass a valid model name. You passed %s' % (model_name)}), 205
+            validate_img = False
+            if len(img) > 11 and img[0:11] == "data:image/":
+                validate_img = True
 
-	return resp_obj
+            if validate_img != True:
+                return jsonify({'success': False, 'error': 'you must pass both img as base64 encoded string'}), 205
 
-def verify():
+            instance.append(img)
+            instances.append(instance)
 
-	global graph
+    # --------------------------
+    if len(instances) == 0:
+        return jsonify({'success': False, 'error': 'you must pass at least one img object in your request'}), 205
 
-	tic = time.time()
-	req = request.get_json()
-	trx_id = uuid.uuid4()
+    # --------------------------
+    if model_name == "retina":
+        # resp_obj = DeepFace.functions.detect_face(instances, detector_backend='retina')
+        # resp_obj = preprocess_face(instances)
+        resp_obj = functions.preprocess_face(img, target_size=(112, 112), detector_backend="retina",
+                                             enforce_detection=False)
+    return resp_obj
 
-	resp_obj = jsonify({'success': False})
 
-	if tf_version == 1:
-		with graph.as_default():
-			resp_obj = verifyWrapper(req, trx_id)
-	elif tf_version == 2:
-		resp_obj = verifyWrapper(req, trx_id)
+def verifyWrapper(req, trx_id=0):
+    resp_obj = jsonify({'success': False})
 
-	#--------------------------
+    model_name = "VGG-Face"
+    distance_metric = "cosine"
+    if "model_name" in list(req.keys()):
+        model_name = req["model_name"]
 
-	toc =  time.time()
+    if "distance_metric" in list(req.keys()):
+        distance_metric = req["distance_metric"]
 
-	resp_obj["trx_id"] = trx_id
-	resp_obj["seconds"] = toc-tic
+    # ----------------------
 
-	return resp_obj, 200
+    instances = []
+    if "img" in list(req.keys()):
+        raw_content = req["img"]  # list
+
+        for item in raw_content:  # item is in type of dict
+            instance = []
+            img1 = item["img1"]
+            img2 = item["img2"]
+
+            validate_img1 = False
+            if len(img1) > 11 and img1[0:11] == "data:image/":
+                validate_img1 = True
+
+            validate_img2 = False
+            if len(img2) > 11 and img2[0:11] == "data:image/":
+                validate_img2 = True
+
+            if validate_img1 != True or validate_img2 != True:
+                return jsonify(
+                    {'success': False, 'error': 'you must pass both img1 and img2 as base64 encoded string'}), 205
+
+            instance.append(img1)
+            instance.append(img2)
+            instances.append(instance)
+
+    # --------------------------
+
+    if len(instances) == 0:
+        return jsonify({'success': False, 'error': 'you must pass at least one img object in your request'}), 205
+
+    print("Input request of ", trx_id, " has ", len(instances), " pairs to verify")
+
+    # --------------------------
+
+    if model_name == "VGG-Face":
+        resp_obj = DeepFace.verify(instances, model_name=model_name, distance_metric=distance_metric,
+                                   model=vggface_model, detector_backend="retina")
+    elif model_name == "Facenet":
+        resp_obj = DeepFace.verify(instances, model_name=model_name, distance_metric=distance_metric,
+                                   model=facenet_model, detector_backend="retina")
+    elif model_name == "OpenFace":
+        resp_obj = DeepFace.verify(instances, model_name=model_name, distance_metric=distance_metric,
+                                   model=openface_model, detector_backend="retina")
+    elif model_name == "DeepFace":
+        resp_obj = DeepFace.verify(instances, model_name=model_name, distance_metric=distance_metric,
+                                   model=deepface_model, detector_backend="retina")
+    elif model_name == "DeepID":
+        resp_obj = DeepFace.verify(instances, model_name=model_name, distance_metric=distance_metric,
+                                   model=deepid_model, detector_backend="retina")
+    elif model_name == "ArcFace":
+        resp_obj = DeepFace.verify(instances, model_name=model_name, distance_metric=distance_metric,
+                                   model=arcface_model, detector_backend="retina")
+    # elif model_name == "Ensemble":
+    # 	models =  {}
+    # 	models["VGG-Face"] = vggface_model
+    # 	models["Facenet"] = facenet_model
+    # 	models["OpenFace"] = openface_model
+    # 	models["DeepFace"] = deepface_model
+    # 	resp_obj = DeepFace.verify(instances, model_name = model_name, model = models)
+    else:
+        resp_obj = jsonify(
+            {'success': False, 'error': 'You must pass a valid model name. You passed %s' % model_name}), 205
+
+    return resp_obj
 
 
 if __name__ == '__main__':
-	parser = argparse.ArgumentParser()
-	parser.add_argument(
-		'-p', '--port',
-		type=int,
-		default=5000,
-		help='Port of serving api')
-	args = parser.parse_args()
-	app.run(host='127.0.0.1', port=args.port)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '-p', '--port',
+        type=int,
+        default=5000,
+        help='Port of serving api')
+    args = parser.parse_args()
+    app.run(host='127.0.0.1', port=args.port)
