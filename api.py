@@ -1,11 +1,13 @@
-from flask import Flask, request, jsonify, Response
+from flask import Flask, request, jsonify, Response , json
 
+import base64, io
 import argparse
 import uuid
 import time
 import cv2
 import numpy as np
 from tqdm import tqdm
+from PIL import Image
 
 from camera import VideoCamera
 from deepface.basemodels.retinaface.detector import RetinaFace
@@ -78,21 +80,6 @@ if tf_version == 1:
 def index():
     return '<h1>Hello, world!</h1>'
 
-
-# @app.route('/detection', methods=['POST'])
-# def detection():
-#     tic = time.time()
-#     req = request.get_json()
-#
-#     resp_obj = jsonify({'success': False})
-#     resp_obj = detectWrapper(req)
-#     # --------------------------
-#
-#     toc = time.time()
-#
-#     resp_obj["seconds"] = toc - tic
-#
-#     return resp_obj, 200
 @app.route('/detection', methods=['POST'])
 def detection():
     req = request.get_json()
@@ -180,8 +167,42 @@ def search_face(target_embedding):
     return score, source
 
 
+# Take in base64 string and return cv image
+def stringToRGB(base64_string):
+    print(base64_string)
+    imgdata = base64.b64decode(base64_string)
+    image = Image.open(io.BytesIO(imgdata))
+    return cv2.cvtColor(np.array(image), cv2.COLOR_BGR2RGB)
+
+def detectface(img):
+    faces = detector(img)
+    res_obj = []
+    count = 0
+    for box, landmarks, score in faces:
+        count = count+1
+        result = ()
+        score.astype(float)
+        box = box.astype(int)
+        landmarks = landmarks.astype(int)
+        if score < 0.4:
+            continue
+        box = box.tolist()
+        landmarks = landmarks.tolist()
+        score = score.astype(str)
+        # result = (box, score)
+        resp_obj = {
+             "faceLandmarks": landmarks
+            , "faceRectangle": box
+            , "model": "retina"
+            , "confidence": score
+            , "faceNumber": count
+        }
+        res_obj.append(resp_obj)
+
+    return res_obj
 def preprocess_face(img):
     # img might be path, base64 or numpy array. Convert it to numpy whatever it is.
+
     faces = detector(img)
     res_obj = []
     for box, landmarks, score in faces:
@@ -198,12 +219,14 @@ def preprocess_face(img):
         else:
             img_alignment = cropped
         cropped = cv2.resize(img_alignment, (112, 112))
+
         img_pixels = image.img_to_array(cropped)
         img_pixels = np.expand_dims(img_pixels, axis=0)
         img_pixels /= 255  # normalize input in [0, 1]
 
         result = (img_pixels, box, score)
         res_obj.append(result)
+
     return res_obj
 
 
@@ -228,19 +251,23 @@ def detectWrapper(req):
             if validate_img != True:
                 return jsonify({'success': False, 'error': 'you must pass both img as base64 encoded string'}), 205
 
-            instance.append(img)
-            instances.append(instance)
+            img = functions.loadBase64Img(img)
+            faces = detectface(img)
+            resp_obj = json.dumps(faces)
+
+            # instance.append(img)
+            # instances.append(instance)
 
     # --------------------------
-    if len(instances) == 0:
-        return jsonify({'success': False, 'error': 'you must pass at least one img object in your request'}), 205
+    # if len(instances) == 0:
+    #     return jsonify({'success': False, 'error': 'you must pass at least one img object in your request'}), 205
 
-    # --------------------------
-    if model_name == "retina":
-        # resp_obj = DeepFace.functions.detect_face(instances, detector_backend='retina')
-        # resp_obj = preprocess_face(instances)
-        resp_obj = functions.preprocess_face(img, target_size=(112, 112), detector_backend="retina",
-                                             enforce_detection=False)
+    # for img in instances:
+    #     if model_name == "retina":
+    #         img = functions.loadBase64Img(img)
+    #         faces = detectface(img)
+    #         resp_obj = json.dumps(faces)
+
     return resp_obj
 
 
