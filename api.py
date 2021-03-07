@@ -1,4 +1,5 @@
 from flask import Flask, request, jsonify, Response , json
+from flask_cors import CORS
 
 import base64, io
 import argparse
@@ -8,6 +9,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 from PIL import Image
+
 
 from camera import VideoCamera
 from deepface.basemodels.retinaface.detector import RetinaFace
@@ -23,6 +25,8 @@ tf_version = int(tf.__version__.split(".")[0])
 # ------------------------------
 
 app = Flask(__name__)
+
+CORS(app, resources={r'/*': {'origins': '*'}})
 
 # ------------------------------
 
@@ -240,20 +244,20 @@ def detectWrapper(req):
     if "img" in list(req.keys()):
         raw_content = req["img"]  # list
 
-        for item in raw_content:  # item is in type of dict
-            instance = []
-            img = item["img"]
+        # for item in raw_content:  # item is in type of dict
+        #     instance = []
+        #     img = item["img"]
+        #
+        #     validate_img = False
+        #     if len(img) > 11 and img[0:11] == "data:image/":
+        #         validate_img = True
+        #
+        #     if validate_img != True:
+        #         return jsonify({'success': False, 'error': 'you must pass both img as base64 encoded string'}), 205
 
-            validate_img = False
-            if len(img) > 11 and img[0:11] == "data:image/":
-                validate_img = True
-
-            if validate_img != True:
-                return jsonify({'success': False, 'error': 'you must pass both img as base64 encoded string'}), 205
-
-            img = functions.loadBase64Img(img)
-            faces = detectface(img)
-            resp_obj = json.dumps(faces)
+        img = functions.loadBase64Img(raw_content)
+        faces = detectface(img)
+        resp_obj = json.dumps(faces)
 
             # instance.append(img)
             # instances.append(instance)
