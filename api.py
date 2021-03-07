@@ -1,3 +1,5 @@
+import jsonpickle
+from _dlib_pybind11.image_dataset_metadata import image
 from flask import Flask, request, jsonify, Response , json
 from flask_cors import CORS
 
@@ -9,7 +11,7 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 from PIL import Image
-
+from base64 import encodebytes
 
 from camera import VideoCamera
 from deepface.basemodels.retinaface.detector import RetinaFace
@@ -178,10 +180,12 @@ def stringToRGB(base64_string):
     image = Image.open(io.BytesIO(imgdata))
     return cv2.cvtColor(np.array(image), cv2.COLOR_BGR2RGB)
 
+
 def detectface(img):
     faces = detector(img)
     res_obj = []
     count = 0
+
     for box, landmarks, score in faces:
         count = count+1
         result = ()
@@ -190,6 +194,8 @@ def detectface(img):
         landmarks = landmarks.astype(int)
         if score < 0.4:
             continue
+        cv2.rectangle(img, (box[0], box[1]), (box[2], box[3]), color=(0, 0, 200), thickness=1)
+
         box = box.tolist()
         landmarks = landmarks.tolist()
         score = score.astype(str)
@@ -202,8 +208,12 @@ def detectface(img):
             , "faceNumber": count
         }
         res_obj.append(resp_obj)
+    # ret, jpeg = cv2.imencode('.jpg', img)
+    # response_pickled = jsonpickle.encode(jpeg)
+    # res_obj.append(response_pickled)
 
     return res_obj
+
 def preprocess_face(img):
     # img might be path, base64 or numpy array. Convert it to numpy whatever it is.
 

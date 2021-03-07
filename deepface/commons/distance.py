@@ -20,13 +20,13 @@ def findThreshold(model_name, distance_metric):
 	base_threshold = {'cosine': 0.40, 'euclidean': 0.55, 'euclidean_l2': 0.75}
 	
 	thresholds = {
-		'VGG-Face': {'cosine': 0.40, 'euclidean': 0.55, 'euclidean_l2': 0.75},
+		'VGG-Face': {'cosine': 0.3828998554497957, 'euclidean': 0.5837138535827399, 'euclidean_l2': 0.8437118818678639},
 		'OpenFace': {'cosine': 0.10, 'euclidean': 0.55, 'euclidean_l2': 0.55},
-		'Facenet':  {'cosine': 0.40, 'euclidean': 10, 'euclidean_l2': 0.80},
+		'Facenet':  {'cosine': 0.6142496640305134, 'euclidean': 12.794783464670182, 'euclidean_l2': 1.0578221621432087},
 		'DeepFace': {'cosine': 0.23, 'euclidean': 64, 'euclidean_l2': 0.64},
 		'DeepID': 	{'cosine': 0.015, 'euclidean': 45, 'euclidean_l2': 0.17},
-		'Dlib': 	{'cosine': 0.07, 'euclidean': 0.6, 'euclidean_l2': 0.6},
-		'ArcFace':  {'cosine': 0.6871912959056619, 'euclidean': 4.1591468986978075, 'euclidean_l2': 1.1315718048269017}
+		'Dlib': 	{'cosine': 0.08838775356588767, 'euclidean': 0.5821402502891807, 'euclidean_l2': 0.4102203243676945},
+		'ArcFace':  {'cosine': 0.620748013800026, 'euclidean': 5.081651272556998, 'euclidean_l2': 1.0885364669832316}
 		}
 
 	threshold = thresholds.get(model_name, base_threshold).get(distance_metric, 0.4)
