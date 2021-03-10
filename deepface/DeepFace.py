@@ -136,7 +136,7 @@ def verify(img1_path, img2_path = '', model_name = 'VGG-Face', distance_metric =
 			
 			ensemble_features = []
 			
-			for i in  model_names:
+			for i in model_names:
 				custom_model = models[i]
 				
 				#decide input shape
@@ -223,10 +223,8 @@ def verify(img1_path, img2_path = '', model_name = 'VGG-Face', distance_metric =
 				boosted_tree = Boosting.build_gbm()
 				
 				prediction = boosted_tree.predict(np.expand_dims(np.array(ensemble_features), axis=0))[0]
-				
-				verified = np.argmax(prediction) == 1
+				verified = bool(np.argmax(prediction) == 1)
 				score = prediction[np.argmax(prediction)]
-				
 				resp_obj = {
 					"verified": verified
 					, "score": score

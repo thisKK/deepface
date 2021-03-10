@@ -1,6 +1,4 @@
-import jsonpickle
-from _dlib_pybind11.image_dataset_metadata import image
-from flask import Flask, request, jsonify, Response , json
+from flask import Flask, request, jsonify, Response, json
 from flask_cors import CORS
 
 import base64, io
@@ -11,7 +9,6 @@ import cv2
 import numpy as np
 from tqdm import tqdm
 from PIL import Image
-from base64 import encodebytes
 
 from camera import VideoCamera
 from deepface.basemodels.retinaface.detector import RetinaFace
@@ -86,6 +83,7 @@ if tf_version == 1:
 def index():
     return '<h1>Hello, world!</h1>'
 
+
 @app.route('/detection', methods=['POST'])
 def detection():
     req = request.get_json()
@@ -126,23 +124,42 @@ def video_feed():
 
 
 def gen(camera):
+    cap = cv2.VideoCapture(0)
     while True:
-        frame = camera.get_frame()
-        res_obj = preprocess_face(frame)
-        for img, box, score in res_obj:
-            embedding = arcface_model.predict(img)
-            embedding = embedding[0]
-            score, source = search_face(embedding)
-            cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), color=(255, 0, 0), thickness=1)
-            cv2.putText(frame, source + str(score), (box[0], box[1] - 5), cv2.FONT_HERSHEY_COMPLEX, 0.7,
-                        (255, 255, 255), 2)
+        isSuccess, frame = cap.read()
+        # frame = camera.get_frame()
+        try:
+            res_obj = preprocess_face(frame)
+            for img, box, score in res_obj:
+                embedding = arcface_model.predict(img)
+                embedding = embedding[0]
+                score, source = search_face(embedding)
+                cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), color=(255, 0, 0), thickness=1)
+                cv2.putText(frame, source + str(score), (box[0], box[1] - 5), cv2.FONT_HERSHEY_COMPLEX, 0.7,
+                            (255, 255, 255), 2)
 
-        ret, jpeg = cv2.imencode('.jpg', frame)
-        data = []
-        data.append(jpeg.tobytes())
-        frame = data[0]
-        yield (b'--frame\r\n'
-               b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
+            ret, jpeg = cv2.imencode('.jpg', frame)
+            data = []
+            data.append(jpeg.tobytes())
+            frame = data[0]
+            yield (b'--frame\r\n'
+                   b'Content-Type: image/jpeg\r\n\r\n' + frame + b'\r\n\r\n')
+        except:
+            pass
+
+
+def drawingBBox(frame, res_obj):
+    for img, box, score in res_obj:
+        embedding = arcface_model.predict(img)
+        embedding = embedding[0]
+        score, source = search_face(embedding)
+        cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), color=(255, 0, 0), thickness=1)
+        if score < 0.45:
+            cv2.putText(frame, source, (box[0], box[1] - 5), cv2.FONT_HERSHEY_COMPLEX, 0.7,
+                        (255, 255, 255), 2)
+        else:
+            cv2.putText(frame, 'UNKNOW', (box[0], box[1] - 5), cv2.FONT_HERSHEY_COMPLEX, 0.7,
+                        (255, 255, 255), 2)
 
 
 def search_face(target_embedding):
@@ -187,7 +204,7 @@ def detectface(img):
     count = 0
 
     for box, landmarks, score in faces:
-        count = count+1
+        count = count + 1
         result = ()
         score.astype(float)
         box = box.astype(int)
@@ -201,7 +218,7 @@ def detectface(img):
         score = score.astype(str)
         # result = (box, score)
         resp_obj = {
-             "faceLandmarks": landmarks
+            "faceLandmarks": landmarks
             , "faceRectangle": box
             , "model": "retina"
             , "confidence": score
@@ -214,11 +231,12 @@ def detectface(img):
 
     return res_obj
 
+
 def preprocess_face(img):
     # img might be path, base64 or numpy array. Convert it to numpy whatever it is.
-
     faces = detector(img)
     res_obj = []
+
     for box, landmarks, score in faces:
         result = ()
         score.astype(np.float)
@@ -269,8 +287,8 @@ def detectWrapper(req):
         faces = detectface(img)
         resp_obj = json.dumps(faces)
 
-            # instance.append(img)
-            # instances.append(instance)
+        # instance.append(img)
+        # instances.append(instance)
 
     # --------------------------
     # if len(instances) == 0:
@@ -350,13 +368,14 @@ def verifyWrapper(req, trx_id=0):
     elif model_name == "ArcFace":
         resp_obj = DeepFace.verify(instances, model_name=model_name, distance_metric=distance_metric,
                                    model=arcface_model, detector_backend="retina")
-    # elif model_name == "Ensemble":
-    # 	models =  {}
-    # 	models["VGG-Face"] = vggface_model
-    # 	models["Facenet"] = facenet_model
-    # 	models["OpenFace"] = openface_model
-    # 	models["DeepFace"] = deepface_model
-    # 	resp_obj = DeepFace.verify(instances, model_name = model_name, model = models)
+    elif model_name == "Ensemble":
+        models = {}
+        models["VGG-Face"] = vggface_model
+        models["Facenet"] = facenet_model
+        models["OpenFace"] = openface_model
+        models["DeepFace"] = deepface_model
+
+        resp_obj = DeepFace.verify(instances, model_name=model_name, detector_backend="retina")
     else:
         resp_obj = jsonify(
             {'success': False, 'error': 'You must pass a valid model name. You passed %s' % model_name}), 205

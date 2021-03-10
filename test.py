@@ -113,8 +113,11 @@ def addFaceToDatabaseWithVideo(pathVideo):
     print("Pass Q for brake add face process")
     cap = cv2.VideoCapture(pathVideo)
     while True:
-        isSuccess, frame = cap.read()
-        preprocess_video(frame,name)
+        try:
+            isSuccess, frame = cap.read()
+            preprocess_video(frame,name)
+        except:
+            pass
         if cv2.waitKey(1) & 0xFF == ord('q'):
             print("Terminate by user")
             break
@@ -170,12 +173,12 @@ def drawingBBox(frame,res_obj):
         embedding = embedding[0]
         score, source = search_face(embedding)
         cv2.rectangle(frame, (box[0], box[1]), (box[2], box[3]), color=(255, 0, 0), thickness=1)
-        if score < 0.45:
-            cv2.putText(frame, source, (box[0], box[1] - 5), cv2.FONT_HERSHEY_COMPLEX, 0.7,
-                        (255, 255, 255), 2)
-        else:
+        if score > 0.25:
             cv2.putText(frame, 'UNKNOW', (box[0], box[1] - 5), cv2.FONT_HERSHEY_COMPLEX, 0.7,
                         (255, 255, 255), 2)
+            continue
+        cv2.putText(frame, source, (box[0], box[1] - 5), cv2.FONT_HERSHEY_COMPLEX, 0.7,
+                    (255, 255, 255), 2)
 
 def streamOnCammera():
     while True:
@@ -229,4 +232,4 @@ if __name__ == "__main__":
     # addFaceToDatabaseWithCamera()
     # addFaceToDatabaseWithVideo('./tests/video/toei.MOV')
     # streamOnCammera()
-    streamOnVideo('./tests/video/testVideo3.mp4')
+    streamOnVideo('./tests/video/testVideo1.mp4')
